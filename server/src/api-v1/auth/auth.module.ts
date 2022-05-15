@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import {forwardRef, Module} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -10,8 +10,9 @@ import { jwtConfig } from '../../config/jwt.config';
 import {HttpModule} from "@nestjs/axios";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([UserEntity]), ImmichJwtModule, JwtModule.register(jwtConfig), HttpModule],
+  imports: [TypeOrmModule.forFeature([UserEntity]), forwardRef(() => ImmichJwtModule), JwtModule.register(jwtConfig), HttpModule],
   controllers: [AuthController],
   providers: [AuthService, ImmichJwtService],
+  exports: [AuthService],
 })
 export class AuthModule {}

@@ -52,6 +52,34 @@ export class AuthService {
     return null;
   }
 
+  // todo similar to AuthService.loginOauth (loginOauth is not actually required)
+  public async validateUserOauth(params: OAuthLoginDto) {
+    if (process.env.OAUTH2_ENABLE !== 'true') throw new BadRequestException("OAuth2.0/OIDC authentication not enabled!");
+
+    const userinfoEndpoint = await this.getUserinfoEndpoint();
+
+    const headersRequest = {
+      'Authorization': `Bearer ${params.accessToken}`,
+    };
+
+    const response = await lastValueFrom(await this.httpService
+        .get(userinfoEndpoint, { headers: headersRequest }))
+        .catch((e) => Logger.log(e, "AUTH")) as AxiosResponse;
+
+    if (!response || response.status !== 200) {
+      throw new UnauthorizedException('Cannot validate token');
+    }
+
+    Logger.debug("Called userinfo endpoint", "AUTH");
+
+    const email = response.data['email'];
+    if (!email || email === "") throw new BadRequestException("User email not found", "AUTH");
+
+    const user = await this.userRepository.findOne({ email: email });
+
+    return user;
+  }
+
   public async loginParams() {
 
     const params = {
