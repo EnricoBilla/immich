@@ -6,6 +6,7 @@ import { LoginCredentialDto } from './dto/login-credential.dto';
 import { SignUpDto } from './dto/sign-up.dto';
 import {OAuthLoginDto} from "./dto/o-auth-login.dto";
 import {OAuthAccessTokenDto} from "./dto/o-auth-access-token.dto";
+import { Oauth2AuthGuard } from '../../modules/immich-jwt/guards/oauth-auth.guard';
 
 @Controller('auth')
 export class AuthController {
