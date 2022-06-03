@@ -22,9 +22,17 @@ export class AuthController {
     return await this.authService.signUp(signUpCrendential);
   }
 
-  @UseGuards(JwtAuthGuard)
+  // @UseGuards(Oauth2AuthGuard)
+  // @Post('/validateToken')
+  // async validateToken(@GetAuthUser() authUser: AuthUserDto) {
+  //   return {
+  //     authStatus: true,
+  //   };
+  // }
+
+  @UseGuards(Oauth2AuthGuard)
   @Post('/validateToken')
-  async validateToken(@GetAuthUser() authUser: AuthUserDto) {
+  async validateToken(authUser: AuthUserDto) {
     return {
       authStatus: true,
     };
