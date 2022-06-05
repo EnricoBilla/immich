@@ -9,7 +9,7 @@ import {InjectRepository} from '@nestjs/typeorm';
 import {Repository} from 'typeorm';
 import {UserEntity} from '../user/entities/user.entity';
 import {LoginCredentialDto} from './dto/login-credential.dto';
-import {ImmichJwtService} from '../../modules/immich-jwt/immich-jwt.service';
+import {ImmichJwtService} from '../../modules/immich-auth/immich-jwt.service';
 import {JwtPayloadDto} from './dto/jwt-payload.dto';
 import {SignUpDto} from './dto/sign-up.dto';
 import * as bcrypt from 'bcrypt';
@@ -23,14 +23,10 @@ import * as util from "util";
 @Injectable()
 export class AuthService {
 
-  private oauthUserinfoEndpoint: string;
-  private oauthTokenEndpoint: string;
-
   constructor(
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
     private immichJwtService: ImmichJwtService,
-    private httpService: HttpService,
   ) {}
 
   private async validateLocalUser(loginCredential: LoginCredentialDto): Promise<UserEntity> {
@@ -48,36 +44,6 @@ export class AuthService {
     }
 
     return null;
-  }
-
-  // todo similar to AuthService.loginOauth (loginOauth is not actually required)
-  public async validateUserOauth(params: OAuthLoginDto) {
-    if (process.env.OAUTH2_ENABLE !== 'true') throw new BadRequestException("OAuth2.0/OIDC authentication not enabled!");
-
-    const userinfoEndpoint = await this.getUserinfoEndpoint();
-
-    const headersRequest = {
-      'Authorization': `Bearer ${params.accessToken}`,
-    };
-
-    const response = await lastValueFrom(await this.httpService
-        .get(userinfoEndpoint, { headers: headersRequest }))
-        .catch((e) => Logger.log(e, "AUTH")) as AxiosResponse;
-
-    if (!response || response.status !== 200) {
-      throw new UnauthorizedException('Cannot validate token');
-    }
-
-    Logger.debug("Called userinfo endpoint", "AUTH");
-
-    const email = response.data['email'];
-    if (!email || email === "") throw new BadRequestException("User email not found", "AUTH");
-
-    Logger.debug(email);
-
-    const user = await this.userRepository.findOne({ email: email });
-
-    return user;
   }
 
   public async loginParams() {
@@ -234,48 +200,6 @@ export class AuthService {
   private async validatePassword(hasedPassword: string, inputPassword: string, salt: string): Promise<boolean> {
     const hash = await bcrypt.hash(inputPassword, salt);
     return hash === hasedPassword;
-  }
-
-  private async getUserinfoEndpoint(): Promise<string> {
-    if (this.oauthUserinfoEndpoint) return this.oauthUserinfoEndpoint;
-
-    const endpoint = await this.fetchOauthEndpoint('userinfo_endpoint');
-    if (endpoint) {
-      this.oauthUserinfoEndpoint = endpoint;
-      return this.oauthUserinfoEndpoint;
-    }
-
-    return undefined;
-  }
-
-  private async getTokenEndpoint(): Promise<string> {
-    if (this.oauthTokenEndpoint) return this.oauthTokenEndpoint;
-
-    const endpoint = await this.fetchOauthEndpoint('token_endpoint');
-    if (endpoint) {
-      this.oauthTokenEndpoint = endpoint;
-      return this.oauthTokenEndpoint;
-    }
-
-    return undefined;
-  }
-
-  private async fetchOauthEndpoint(endpointId: string): Promise<string> {
-    const response = await lastValueFrom(await this.httpService
-        .get(process.env.OAUTH2_DISCOVERY_URL))
-        .catch((e) => Logger.log(e, "AUTH")) as AxiosResponse;
-
-    if (!response) return undefined;
-    if (response.status !== 200) return undefined;
-
-    Logger.debug(`Called discovery to get ${endpointId}`, "AUTH");
-    const endpoint = response.data[endpointId];
-    if (!endpoint) {
-      Logger.debug(`${endpointId} not found`, "AUTH");
-      return undefined;
-    }
-
-    return endpoint;
   }
 
 }

@@ -14,14 +14,15 @@ import {AuthService} from "../../../api-v1/auth/auth.service";
 import {UserEntity} from '../../../api-v1/user/entities/user.entity';
 import * as util from "util";
 import {validate} from "class-validator";
+import {ImmichOauth2Service} from "../immich-oauth2.service";
 
 @Injectable()
 export class Oauth2Strategy extends PassportStrategy(Strategy, 'oauth2') {
     constructor(
         @InjectRepository(UserEntity)
         private usersRepository: Repository<UserEntity>,
-        @Inject(AuthService)
-        private authService: AuthService,
+        @Inject(ImmichOauth2Service)
+        private oauth2Service: ImmichOauth2Service,
     ) {
         super(async (req, callback) => {
 
@@ -36,7 +37,7 @@ export class Oauth2Strategy extends PassportStrategy(Strategy, 'oauth2') {
 
             const token = authHeader.substring(7, authHeader.length);
 
-            await this.authService.validateUserOauth({
+            await this.oauth2Service.validateUserOauth({
                 accessToken: token,
             }).then((user) => {
                 if (user && !user.isLocalUser) {
