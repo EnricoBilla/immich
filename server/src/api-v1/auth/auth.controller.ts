@@ -22,19 +22,13 @@ export class AuthController {
     return await this.authService.signUp(signUpCrendential);
   }
 
-  // @UseGuards(Oauth2AuthGuard)
-  // @Post('/validateToken')
-  // async validateToken(@GetAuthUser() authUser: AuthUserDto) {
-  //   return {
-  //     authStatus: true,
-  //   };
-  // }
-
   @UseGuards(Oauth2AuthGuard)
   @Post('/validateToken')
-  async validateToken(authUser: AuthUserDto) {
+  async validateToken(@GetAuthUser() authUser: AuthUserDto) {
     return {
       authStatus: true,
+      email: authUser.email,
+      id: authUser.id,
     };
   }
 

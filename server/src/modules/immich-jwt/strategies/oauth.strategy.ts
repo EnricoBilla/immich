@@ -1,4 +1,11 @@
-import { Inject, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  ImATeapotException,
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  UnauthorizedException
+} from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Strategy } from 'passport-custom';
@@ -17,24 +24,33 @@ export class Oauth2Strategy extends PassportStrategy(Strategy, 'oauth2') {
     private authService: AuthService,
   ) {
     super(async (req, callback) => {
-      Logger.log("inside verify", "VERIFY");
-      //Logger.log(util.inspect(req));
-      Logger.log(util.inspect(callback));
-      return callback(null, validate(req));
+
+      Logger.debug('Trying OAuth2/OIDC authentication', 'OAUTH2 STRATEGY');
+
+      const authHeader = req.headers['authorization'];
+
+      console.log(authHeader);
+
+      if (authHeader==undefined || !authHeader.startsWith("Bearer ")) {
+        callback(new UnauthorizedException(), null);
+        return;
+      }
+
+      const token = authHeader.substring(7, authHeader.length);
+
+      await this.authService.validateUserOauth({
+        accessToken: token,
+      }).then((user) => {
+        if (user && !user.isLocalUser) {
+          callback(null, user);
+        } else {
+          callback(new UnauthorizedException("Cannot validate local user with OAuth2"), null);
+        }
+      }).catch(
+          (err) => callback(err, null)
+      );
+
     });
   }
 
-  async validate(req: Request) {
-    Logger.warn('Trying OAuth2/OIDC authentication', 'AUTH STRATEGY');
-    Logger.log(util.inspect(req.headers));
-    console.log(req.headers['authorization'].replace('Bearer ', ''));
-    const user = await this.authService.validateUserOauth({
-      accessToken: req.headers['authorization'].replace('Bearer ', ''),
-    });
-    Logger.debug("A");
-    if (user && !user.isLocalUser) {
-      Logger.debug("User ok");
-      return user;
-    }
-  }
 }
