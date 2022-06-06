@@ -33,7 +33,8 @@ export class Oauth2Strategy extends PassportStrategy(Strategy, 'oauth2') {
             const authHeader = req.headers['authorization'];
 
             if (authHeader == undefined || !authHeader.startsWith("Bearer ")) {
-                callback(new UnauthorizedException(), null);
+                Logger.debug("No bearer token");
+                callback(null, null, "No authorization token");
                 return;
             }
 
@@ -43,13 +44,15 @@ export class Oauth2Strategy extends PassportStrategy(Strategy, 'oauth2') {
                 accessToken: token,
             }).then((user) => {
                 if (user && !user.isLocalUser) {
+                    Logger.debug(`Authorized user: ${user.email}`);
                     callback(null, user);
                 } else {
-                    // todo verify behaviour when user is valid but not in database
-                    callback(new UnauthorizedException("Cannot validate local user with OAuth2"), null);
+                    Logger.debug("User not found or not local");
+                    callback(null, null, "Cannot validate local user with OAuth2");
                 }
             }).catch((err) => {
-                    callback(err, null);
+                    Logger.debug(`Cannot validate local user with OAuth2: ${err}`);
+                    callback(null, null, "Cannot validate local user with OAuth2");
                 }
             );
 

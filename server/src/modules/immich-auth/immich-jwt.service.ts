@@ -7,6 +7,7 @@ import { UserEntity } from '../../api-v1/user/entities/user.entity';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ImmichAuthService } from './immich-auth.service';
+import * as util from 'util';
 
 @Injectable()
 export class ImmichJwtService {
@@ -42,8 +43,10 @@ export class ImmichJwtService {
   private async validateLocalUser(email: string, password: string): Promise<UserEntity> {
     const user = await this.userRepository.findOne(
       { email: email },
-      { select: ['id', 'email', 'password', 'salt'] },
+      { select: ['id', 'email', 'password', 'salt', 'isLocalUser'] },
     );
+
+    console.log(util.inspect(user));
 
     if (!user || !user.isLocalUser) throw new BadRequestException('Incorrect email or password');
 

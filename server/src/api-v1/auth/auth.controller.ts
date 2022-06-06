@@ -4,7 +4,6 @@ import { ImmichAuthGuard } from '../../modules/immich-auth/guards/immich-auth.gu
 import { AuthService } from './auth.service';
 import { LoginCredentialDto } from './dto/login-credential.dto';
 import { SignUpDto } from './dto/sign-up.dto';
-import {OAuthLoginDto} from "./dto/o-auth-login.dto";
 import {OAuthAccessTokenDto} from "./dto/o-auth-access-token.dto";
 
 @Controller('auth')

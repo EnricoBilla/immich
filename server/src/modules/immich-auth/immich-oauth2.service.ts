@@ -6,8 +6,6 @@ import {AxiosResponse} from "axios";
 import {InjectRepository} from "@nestjs/typeorm";
 import {UserEntity} from "../../api-v1/user/entities/user.entity";
 import {Repository} from "typeorm";
-import {OAuthAccessTokenDto} from "../../api-v1/auth/dto/o-auth-access-token.dto";
-import util from "util";
 import { ImmichAuthService } from './immich-auth.service';
 
 @Injectable()
@@ -66,11 +64,10 @@ export class ImmichOauth2Service {
     const tokenEndpoint = await this.getTokenEndpoint();
     const response = await lastValueFrom(await this.httpService
       .post(tokenEndpoint, reqParams, { headers: headersRequest }))
-      .catch((e) => {
-        Logger.log(util.inspect(e), "AUTH");
-      }) as AxiosResponse;
+      .catch((e) => e) as AxiosResponse;
 
     if (!response || response.status !== 200) {
+      Logger.debug(`Response from token endpoint with status code ${response.status}, cannot validate token`)
       throw new UnauthorizedException('Cannot validate token');
     }
 
