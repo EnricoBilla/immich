@@ -41,9 +41,4 @@ export class AuthController {
     return await this.authService.accessTokenOauth(params);
   }
 
-  @Post('/oauth/login')
-  async loginOauth(@Body(ValidationPipe) params: OAuthLoginDto) {
-    return await this.authService.loginOauth(params);
-  }
-
 }

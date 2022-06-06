@@ -8,6 +8,7 @@ import {UserEntity} from "../../api-v1/user/entities/user.entity";
 import {Repository} from "typeorm";
 import {OAuthAccessTokenDto} from "../../api-v1/auth/dto/o-auth-access-token.dto";
 import util from "util";
+import { ImmichAuthService } from './immich-auth.service';
 
 @Injectable()
 export class ImmichOauth2Service {
@@ -19,6 +20,7 @@ export class ImmichOauth2Service {
       @InjectRepository(UserEntity)
       private userRepository: Repository<UserEntity>,
       private httpService: HttpService,
+      private immichAuthService: ImmichAuthService,
   ) {}
 
   public async validateUserOauth(params: OAuthLoginDto) {
@@ -39,7 +41,12 @@ export class ImmichOauth2Service {
     const email = response.data['email'];
     if (!email || email === "") throw new BadRequestException("User email not found", "AUTH");
 
-    Logger.debug(`Found token for user: ${email}`, "AUTH");
+    const user = await this.userRepository.findOne({ email: email });
+
+    if (!user) {
+      Logger.log("User does not exist, signing up", "AUTH");
+      return await this.immichAuthService.createUser(email, false, null);
+    }
 
     return await this.userRepository.findOne({ email: email });
   }
@@ -112,26 +119,4 @@ export class ImmichOauth2Service {
     return endpoint;
   }
 
-  async getEmailFromAccessToken(accessToken: string): Promise<string> {
-    const headersRequest = {
-      'Authorization': `Bearer ${accessToken}`,
-    };
-
-    const userinfoEndpoint = await this.getUserinfoEndpoint();
-    const response = await lastValueFrom(await this.httpService
-      .get(userinfoEndpoint, { headers: headersRequest }))
-      .catch((e) => Logger.log(e, "AUTH")) as AxiosResponse;
-
-    if (!response || response.status !== 200) {
-      throw new UnauthorizedException('Cannot validate token');
-    }
-
-    Logger.debug("Called userinfo endpoint", "AUTH");
-
-    const email = response.data['email'];
-    if (!email || email === "") throw new BadRequestException("User email not found", "AUTH");
-
-    return email;
-
-  }
 }

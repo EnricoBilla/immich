@@ -8,10 +8,11 @@ import { UserEntity } from '../../api-v1/user/entities/user.entity';
 import { HttpModule } from "@nestjs/axios";
 import {ImmichOauth2Service} from "./immich-oauth2.service";
 import {Oauth2Strategy} from "./strategies/oauth.strategy";
+import { ImmichAuthService } from './immich-auth.service';
 
 @Module({
   imports: [JwtModule.register(jwtConfig), TypeOrmModule.forFeature([UserEntity]), HttpModule],
-  providers: [ImmichJwtService, ImmichOauth2Service, JwtStrategy, Oauth2Strategy],
-  exports: [ImmichJwtService, ImmichOauth2Service],
+  providers: [ImmichJwtService, ImmichOauth2Service, ImmichAuthService, JwtStrategy, Oauth2Strategy],
+  exports: [ImmichJwtService, ImmichOauth2Service, ImmichAuthService],
 })
 export class ImmichAuthModule {}
