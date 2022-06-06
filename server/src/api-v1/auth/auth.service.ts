@@ -3,7 +3,6 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
-  UnauthorizedException
 } from '@nestjs/common';
 import {InjectRepository} from '@nestjs/typeorm';
 import {Repository} from 'typeorm';
@@ -14,11 +13,8 @@ import {JwtPayloadDto} from './dto/jwt-payload.dto';
 import {SignUpDto} from './dto/sign-up.dto';
 import * as bcrypt from 'bcrypt';
 import {OAuthLoginDto} from "./dto/o-auth-login.dto";
-import {HttpService} from "@nestjs/axios";
-import {firstValueFrom, lastValueFrom} from "rxjs";
-import {AxiosResponse} from "axios";
 import {OAuthAccessTokenDto} from "./dto/o-auth-access-token.dto";
-import * as util from "util";
+import { ImmichOauth2Service } from '../../modules/immich-auth/immich-oauth2.service';
 
 @Injectable()
 export class AuthService {
@@ -27,6 +23,7 @@ export class AuthService {
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
     private immichJwtService: ImmichJwtService,
+    private immichOauth2Service: ImmichOauth2Service,
   ) {}
 
   private async validateLocalUser(loginCredential: LoginCredentialDto): Promise<UserEntity> {
@@ -82,6 +79,41 @@ export class AuthService {
     };
   }
 
+  async accessTokenOauth(params: OAuthAccessTokenDto) {
+    if (process.env.OAUTH2_ENABLE !== 'true') throw new BadRequestException("OAuth2.0/OIDC authentication not enabled!");
+
+    const [accessToken, refreshToken] = await this.immichOauth2Service.getAccessTokenFromAuthCode(params.code, params.redirect_uri);
+
+    return {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    }
+  }
+
+  public async login(loginCredential: LoginCredentialDto) {
+    if (process.env.LOCAL_USERS_DISABLE === 'true') throw new BadRequestException("Local users not allowed!");
+
+    const validatedUser = await this.validateLocalUser(loginCredential);
+    if (!validatedUser) throw new BadRequestException('Incorrect email or password');
+
+    return await this._login(validatedUser);
+  }
+
+  public async loginOauth(params: OAuthLoginDto) {
+    if (process.env.OAUTH2_ENABLE !== 'true') throw new BadRequestException("OAuth2.0/OIDC authentication not enabled!");
+
+    const email = await this.immichOauth2Service.getEmailFromAccessToken(params.accessToken);
+
+    let user = await this.userRepository.findOne({ email: email });
+
+    if (!user) {
+      Logger.log("User does not exist, signing up", "AUTH");
+      user = await this._signUp(email, false, null);
+    }
+
+    return this._login(user);
+  }
+
   private async _signUp(email: string, localUser: boolean, password: string | null) {
     const registerUser = await this.userRepository.findOne({ email: email });
 
@@ -106,81 +138,6 @@ export class AuthService {
       Logger.error(e, 'signUp');
       throw new InternalServerErrorException('Failed to register new user');
     }
-  }
-
-  async accessTokenOauth(params: OAuthAccessTokenDto) {
-    if (process.env.OAUTH2_ENABLE !== 'true') throw new BadRequestException("OAuth2.0/OIDC authentication not enabled!");
-
-    const tokenEndpoint = await this.getTokenEndpoint();
-
-    const headersRequest = {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    };
-
-    const reqParams = new URLSearchParams();
-    reqParams.append('grant_type', 'authorization_code');
-    reqParams.append('code', params.code);
-    reqParams.append('client_id', process.env.OAUTH2_CLIENT_ID);
-    reqParams.append('client_secret', process.env.OAUTH2_CLIENT_SECRET);
-    reqParams.append('redirect_uri', params.redirect_uri);
-
-    const response = await lastValueFrom(await this.httpService
-        .post(tokenEndpoint, reqParams, { headers: headersRequest }))
-        .catch((e) => {
-          Logger.log(util.inspect(e), "AUTH");
-        }) as AxiosResponse;
-
-    if (!response || response.status !== 200) {
-      throw new UnauthorizedException('Cannot validate token');
-    }
-
-    console.log(response.data);
-
-    return {
-      access_token: response.data['access_token'],
-      refresh_token: response.data['refresh_token'],
-    }
-  }
-
-  public async loginOauth(params: OAuthLoginDto) {
-    if (process.env.OAUTH2_ENABLE !== 'true') throw new BadRequestException("OAuth2.0/OIDC authentication not enabled!");
-
-    const userinfoEndpoint = await this.getUserinfoEndpoint();
-
-    const headersRequest = {
-      'Authorization': `Bearer ${params.accessToken}`,
-    };
-
-    const response = await lastValueFrom(await this.httpService
-        .get(userinfoEndpoint, { headers: headersRequest }))
-        .catch((e) => Logger.log(e, "AUTH")) as AxiosResponse;
-
-    if (!response || response.status !== 200) {
-      throw new UnauthorizedException('Cannot validate token');
-    }
-
-    Logger.debug("Called userinfo endpoint", "AUTH");
-
-    const email = response.data['email'];
-    if (!email || email === "") throw new BadRequestException("User email not found", "AUTH");
-
-    let user = await this.userRepository.findOne({ email: email });
-
-    if (!user) {
-      Logger.log("User does not exist, signing up", "AUTH");
-      user = await this._signUp(email, false, null);
-    }
-
-    return this._login(user);
-  }
-
-  public async login(loginCredential: LoginCredentialDto) {
-    if (process.env.LOCAL_USERS_DISABLE === 'true') throw new BadRequestException("Local users not allowed!");
-
-    const validatedUser = await this.validateLocalUser(loginCredential);
-    if (!validatedUser) throw new BadRequestException('Incorrect email or password');
-
-    return await this._login(validatedUser);
   }
 
   private async _login(user: UserEntity) {

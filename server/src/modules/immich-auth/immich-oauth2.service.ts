@@ -22,8 +22,6 @@ export class ImmichOauth2Service {
   ) {}
 
   public async validateUserOauth(params: OAuthLoginDto) {
-    if (process.env.OAUTH2_ENABLE !== 'true') throw new BadRequestException("OAuth2.0/OIDC authentication not enabled!");
-
     const userinfoEndpoint = await this.getUserinfoEndpoint();
 
     const headersRequest = {
@@ -38,82 +36,38 @@ export class ImmichOauth2Service {
       throw new UnauthorizedException('Cannot validate token');
     }
 
-    Logger.debug("Called userinfo endpoint", "AUTH");
-
     const email = response.data['email'];
     if (!email || email === "") throw new BadRequestException("User email not found", "AUTH");
 
-    Logger.debug(email);
+    Logger.debug(`Found token for user: ${email}`, "AUTH");
 
-    const user = await this.userRepository.findOne({ email: email });
-
-    return user;
+    return await this.userRepository.findOne({ email: email });
   }
 
-  async accessTokenOauth(params: OAuthAccessTokenDto) {
-    if (process.env.OAUTH2_ENABLE !== 'true') throw new BadRequestException("OAuth2.0/OIDC authentication not enabled!");
-
-    const tokenEndpoint = await this.getTokenEndpoint();
-
+  async getAccessTokenFromAuthCode(code: string, redirectUri: string): Promise<[string, string]> {
     const headersRequest = {
       'Content-Type': 'application/x-www-form-urlencoded',
     };
 
     const reqParams = new URLSearchParams();
     reqParams.append('grant_type', 'authorization_code');
-    reqParams.append('code', params.code);
+    reqParams.append('code', code);
     reqParams.append('client_id', process.env.OAUTH2_CLIENT_ID);
     reqParams.append('client_secret', process.env.OAUTH2_CLIENT_SECRET);
-    reqParams.append('redirect_uri', params.redirect_uri);
+    reqParams.append('redirect_uri', redirectUri);
 
+    const tokenEndpoint = await this.getTokenEndpoint();
     const response = await lastValueFrom(await this.httpService
-        .post(tokenEndpoint, reqParams, { headers: headersRequest }))
-        .catch((e) => {
-          Logger.log(util.inspect(e), "AUTH");
-        }) as AxiosResponse;
+      .post(tokenEndpoint, reqParams, { headers: headersRequest }))
+      .catch((e) => {
+        Logger.log(util.inspect(e), "AUTH");
+      }) as AxiosResponse;
 
     if (!response || response.status !== 200) {
       throw new UnauthorizedException('Cannot validate token');
     }
 
-    console.log(response.data);
-
-    return {
-      access_token: response.data['access_token'],
-      refresh_token: response.data['refresh_token'],
-    }
-  }
-
-  public async loginOauth(params: OAuthLoginDto) {
-    if (process.env.OAUTH2_ENABLE !== 'true') throw new BadRequestException("OAuth2.0/OIDC authentication not enabled!");
-
-    const userinfoEndpoint = await this.getUserinfoEndpoint();
-
-    const headersRequest = {
-      'Authorization': `Bearer ${params.accessToken}`,
-    };
-
-    const response = await lastValueFrom(await this.httpService
-        .get(userinfoEndpoint, { headers: headersRequest }))
-        .catch((e) => Logger.log(e, "AUTH")) as AxiosResponse;
-
-    if (!response || response.status !== 200) {
-      throw new UnauthorizedException('Cannot validate token');
-    }
-
-    Logger.debug("Called userinfo endpoint", "AUTH");
-
-    const email = response.data['email'];
-    if (!email || email === "") throw new BadRequestException("User email not found", "AUTH");
-
-    let user = await this.userRepository.findOne({ email: email });
-
-    if (!user) {
-      Logger.log("User does not exist, signing up", "AUTH");
-      user = await this._signUp(email, false, null); // this _signUp should be moved in a service inside the immich auth module
-    }
-
-    return this._login(user);
+    return [response.data['access_token'], response.data['refresh_token']];
   }
 
   private async getUserinfoEndpoint(): Promise<string> {
@@ -158,4 +112,26 @@ export class ImmichOauth2Service {
     return endpoint;
   }
 
+  async getEmailFromAccessToken(accessToken: string): Promise<string> {
+    const headersRequest = {
+      'Authorization': `Bearer ${accessToken}`,
+    };
+
+    const userinfoEndpoint = await this.getUserinfoEndpoint();
+    const response = await lastValueFrom(await this.httpService
+      .get(userinfoEndpoint, { headers: headersRequest }))
+      .catch((e) => Logger.log(e, "AUTH")) as AxiosResponse;
+
+    if (!response || response.status !== 200) {
+      throw new UnauthorizedException('Cannot validate token');
+    }
+
+    Logger.debug("Called userinfo endpoint", "AUTH");
+
+    const email = response.data['email'];
+    if (!email || email === "") throw new BadRequestException("User email not found", "AUTH");
+
+    return email;
+
+  }
 }

@@ -1,10 +1,11 @@
 import {
+    BadRequestException,
     ImATeapotException,
     Inject,
     Injectable,
     InternalServerErrorException,
     Logger,
-    UnauthorizedException
+    UnauthorizedException,
 } from '@nestjs/common';
 import {PassportStrategy} from '@nestjs/passport';
 import {InjectRepository} from '@nestjs/typeorm';
@@ -26,6 +27,7 @@ export class Oauth2Strategy extends PassportStrategy(Strategy, 'oauth2') {
     ) {
         super(async (req, callback) => {
 
+            if (process.env.OAUTH2_ENABLE !== 'true') throw new BadRequestException("OAuth2.0/OIDC authentication not enabled!");
             Logger.debug('Trying OAuth2/OIDC authentication', 'OAUTH2 STRATEGY');
 
             const authHeader = req.headers['authorization'];
@@ -43,6 +45,7 @@ export class Oauth2Strategy extends PassportStrategy(Strategy, 'oauth2') {
                 if (user && !user.isLocalUser) {
                     callback(null, user);
                 } else {
+                    // todo verify behaviour when user is valid but not in database
                     callback(new UnauthorizedException("Cannot validate local user with OAuth2"), null);
                 }
             }).catch((err) => {
