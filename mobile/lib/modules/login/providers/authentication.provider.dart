@@ -90,7 +90,7 @@ class AuthenticationNotifier extends StateNotifier<AuthenticationState> {
       bool loggedIn = false;
 
       if (loginParams.oauth2 == true && email == '' && password == '') {
-        loggedIn |= await OAuth2Provider.tryLogin(loginParams.authorizeUrl, loginParams.clientId);
+        loggedIn |= await OAuth2Provider.tryLogin(loginParams.discoveryUrl, loginParams.clientId);
       }
 
       if (!loggedIn) {
