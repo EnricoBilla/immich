@@ -52,7 +52,7 @@ export class AuthService {
 
         return {
             authStatus: true,
-            user: mapUser(user),
+            ...mapUser(user),
         };
     }
 

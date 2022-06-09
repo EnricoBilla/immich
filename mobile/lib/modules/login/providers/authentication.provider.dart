@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
@@ -5,8 +7,11 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/constants/hive_box.dart';
 import 'package:immich_mobile/modules/login/models/authentication_state.model.dart';
 import 'package:immich_mobile/modules/login/models/hive_saved_login_info.model.dart';
+import 'package:immich_mobile/modules/login/models/login_params_response.model.dart';
 import 'package:immich_mobile/modules/login/models/login_response.model.dart';
 import 'package:immich_mobile/modules/backup/services/backup.service.dart';
+import 'package:immich_mobile/modules/login/models/validate_token_response.model.dart';
+import 'package:immich_mobile/modules/login/providers/local_auth.provider.dart';
 import 'package:immich_mobile/modules/login/providers/oauth2.provider.dart';
 import 'package:immich_mobile/shared/services/device_info.service.dart';
 import 'package:immich_mobile/shared/services/network.service.dart';
@@ -52,49 +57,6 @@ class AuthenticationNotifier extends StateNotifier<AuthenticationState> {
       Hive.box(userInfoBox).put(serverEndpointKey, serverEndpoint);
     }
 
-    // todo make this better
-    // todo check server loginParams
-    if (email.isEmpty && password.isEmpty) {
-      print("Trying OAuth2/OIDC auth");
-      var oAuth2Token = await OAuth2Provider().getToken();
-      if (oAuth2Token == null) {
-        print("OAuth2/OIDC auth failed");
-        return false;
-      }
-      print("OAuth2/OIDC auth succeful:");
-      print(oAuth2Token.idToken);
-      print(oAuth2Token.refreshToken);
-      print(oAuth2Token.tokenType);
-
-      // todo save login type and refreh token too for oauth2
-
-      Hive.box(userInfoBox).put(accessTokenKey, oAuth2Token.idToken);
-
-      Hive.box<HiveSavedLoginInfo>(hiveLoginInfoBox).put(
-        savedLoginInfoKey,
-        HiveSavedLoginInfo(
-            email: '',
-            password: '',
-            isSaveLogin: true,
-            serverUrl: Hive.box(userInfoBox).get(serverEndpointKey)),
-      );
-
-      // todo fake data, maybe this is cheating ?
-
-      state = state.copyWith(
-        isAuthenticated: true,
-        userId: 'payload.userId',
-        userEmail: 'user@immich.io',
-        firstName: 'Enrico',
-        lastName: '',
-        profileImagePath: '',
-        isAdmin: true,
-        isFirstLoggedIn: true,
-      );
-
-      return true;
-    }
-
     try {
       bool isServerEndpointVerified = await _networkService.pingServer();
       if (!isServerEndpointVerified) {
@@ -113,43 +75,59 @@ class AuthenticationNotifier extends StateNotifier<AuthenticationState> {
       deviceType: deviceInfo["deviceType"],
     );
 
+    LoginParamsResponse loginParams;
+
+    try {
+      Response res = await _networkService.getRequest(url: 'auth/loginParams');
+      loginParams = LoginParamsResponse.fromJson(res.toString());
+    } catch (e) {
+      return false;
+    }
+
     // Make sign-in request
     try {
 
-      // todo move here oauth login
+      bool loggedIn = false;
 
-      Response res = await _networkService.postRequest(url: 'auth/login', data: {'email': email, 'password': password});
-
-      var payload = LogInReponse.fromJson(res.toString());
-
-      // todo save login type and refreh token too for oauth2
-
-      Hive.box(userInfoBox).put(accessTokenKey, payload.accessToken);
-
-      state = state.copyWith(
-        isAuthenticated: true,
-        userId: payload.userId,
-        userEmail: payload.userEmail,
-        firstName: payload.firstName,
-        lastName: payload.lastName,
-        profileImagePath: payload.profileImagePath,
-        isAdmin: payload.isAdmin,
-        isFirstLoggedIn: payload.isFirstLogin,
-      );
-
-      if (isSavedLoginInfo) {
-        // Save login info to local storage
-        Hive.box<HiveSavedLoginInfo>(hiveLoginInfoBox).put(
-          savedLoginInfoKey,
-          HiveSavedLoginInfo(
-              email: email,
-              password: password,
-              isSaveLogin: true,
-              serverUrl: Hive.box(userInfoBox).get(serverEndpointKey)),
-        );
-      } else {
-        Hive.box<HiveSavedLoginInfo>(hiveLoginInfoBox).delete(savedLoginInfoKey);
+      if (loginParams.oauth2 == true && email == '' && password == '') {
+        loggedIn |= await OAuth2Provider.tryLogin(loginParams.authorizeUrl, loginParams.clientId);
       }
+
+      if (!loggedIn) {
+        loggedIn |= await LocalAuthProvider.tryLogin(email, password, _networkService);
+      }
+
+      if (loggedIn == true) {
+
+        Response res = await _networkService.postRequest(url: 'auth/validateToken');
+        var payload = ValidateTokenReponse.fromJson(res.toString());
+
+        state = state.copyWith(
+          isAuthenticated: true,
+          userId: payload.id,
+          userEmail: payload.email,
+          firstName: payload.firstName,
+          lastName: payload.lastName,
+          profileImagePath: payload.profileImagePath,
+          isAdmin: payload.isAdmin,
+          isFirstLoggedIn: payload.isFirstLogin,
+        );
+
+        if (isSavedLoginInfo) {
+          // Save login info to local storage
+          Hive.box<HiveSavedLoginInfo>(hiveLoginInfoBox).put(
+            savedLoginInfoKey,
+            HiveSavedLoginInfo(
+                email: email,
+                password: password,
+                isSaveLogin: true,
+                serverUrl: Hive.box(userInfoBox).get(serverEndpointKey)),
+          );
+        } else {
+          Hive.box<HiveSavedLoginInfo>(hiveLoginInfoBox).delete(savedLoginInfoKey);
+        }
+      }
+
     } catch (e) {
       return false;
     }
