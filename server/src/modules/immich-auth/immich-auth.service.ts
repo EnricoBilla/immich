@@ -62,4 +62,5 @@ export class ImmichAuthService {
       return ['jwt'];
     }
   }
+
 }

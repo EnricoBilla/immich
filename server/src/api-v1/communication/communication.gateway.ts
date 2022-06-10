@@ -1,11 +1,11 @@
 import { OnGatewayConnection, OnGatewayDisconnect, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
-import { CommunicationService } from './communication.service';
 import { Socket, Server } from 'socket.io';
 import { ImmichJwtService } from '../../modules/immich-auth/immich-jwt.service';
-import { Logger } from '@nestjs/common';
+import {Logger, UseGuards} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { UserEntity } from '../user/entities/user.entity';
 import { Repository } from 'typeorm';
+import {ImmichAuthGuard} from "../../modules/immich-auth/guards/immich-auth.guard";
 
 @WebSocketGateway()
 export class CommunicationGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -14,9 +14,12 @@ export class CommunicationGateway implements OnGatewayConnection, OnGatewayDisco
 
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
+
+    private authGuard: ImmichAuthGuard,
   ) {}
 
   @WebSocketServer() server: Server;
+
   handleDisconnect(client: Socket) {
     client.leave(client.nsp.name);
 
@@ -28,6 +31,8 @@ export class CommunicationGateway implements OnGatewayConnection, OnGatewayDisco
     Logger.log(`New websocket connection: ${client.id}`, 'NewWebSocketConnection');
     const accessToken = client.handshake.headers.authorization.split(' ')[1];
     const res = await this.immichJwtService.validateToken(accessToken);
+
+    // todo handle websocket connection with oauth2
 
     if (!res.status) {
       client.emit('error', 'unauthorized');

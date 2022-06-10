@@ -82,11 +82,12 @@ class WebsocketNotifier extends StateNotifier<WebscoketState> {
         });
 
         socket.on('error', (errorMessage) {
-          debugPrint("Webcoket Error - $errorMessage");
+          debugPrint("[WEBSOCKET] Webcoket Error - $errorMessage");
           state = WebscoketState(isConnected: false, socket: null);
         });
 
         socket.on('on_upload_success', (data) {
+          debugPrint("[WEBSOCKET] Upload success");
           var jsonString = jsonDecode(data.toString());
           ImmichAsset newAsset = ImmichAsset.fromMap(jsonString);
           ref.watch(assetProvider.notifier).onNewAssetUploaded(newAsset);
