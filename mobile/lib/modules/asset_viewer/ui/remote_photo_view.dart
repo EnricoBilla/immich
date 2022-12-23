@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:immich_mobile/shared/models/asset.dart';
@@ -22,18 +24,51 @@ class _RemotePhotoViewState extends State<RemotePhotoView> {
   Widget build(BuildContext context) {
     final bool forbidZoom = _status == _RemoteImageStatus.thumbnail;
 
+    // return IgnorePointer(
+    //   ignoring: forbidZoom,
+    //   child: Listener(
+    //     onPointerMove: handleSwipUpDown,
+    //     child: TweenAnimationBuilder<double>(
+    //       tween: Tween<double>(begin: 10, end: 0),
+    //       duration: const Duration(milliseconds: 1000),
+    //       curve: Curves.easeIn,
+    //       builder: (_, value, __) {
+    //         return BackdropFilter(
+    //           filter: ImageFilter.blur(
+    //             sigmaX: value,
+    //             sigmaY: value,
+    //           ),
+    //           child: PhotoView(
+    //             imageProvider: _imageProvider,
+    //             minScale: PhotoViewComputedScale.contained,
+    //             enablePanAlways: false,
+    //             scaleStateChangedCallback: _scaleStateChanged,
+    //           ),
+    //         );
+    //       },
+    //     ),
+    //   ),
+    // );
+
     return IgnorePointer(
       ignoring: forbidZoom,
       child: Listener(
         onPointerMove: handleSwipUpDown,
-        child: PhotoView(
-          imageProvider: _imageProvider,
-          minScale: PhotoViewComputedScale.contained,
-          enablePanAlways: false,
-          scaleStateChangedCallback: _scaleStateChanged,
-        ),
+        child: BackdropFilter(
+              filter: ImageFilter.blur(
+                sigmaX: 10,
+                sigmaY:10,
+              ),
+              child: PhotoView(
+                imageProvider: _imageProvider,
+                minScale: PhotoViewComputedScale.contained,
+                enablePanAlways: false,
+                scaleStateChangedCallback: _scaleStateChanged,
+              ),
+            ),
       ),
     );
+
   }
 
   void handleSwipUpDown(PointerMoveEvent details) {
